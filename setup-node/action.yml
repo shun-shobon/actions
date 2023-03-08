@@ -39,7 +39,7 @@ runs:
     - uses: actions/cache@v3
       with:
         path: ${{ steps.cache.outputs.dir }}
-        key: ${{ runner.os }}-${{ steps.package-manager.outputs.name }}-${{ hashFiles(format('**/{}', steps.cache.outputs.lockfile)) }}
+        key: ${{ runner.os }}-${{ steps.package-manager.outputs.name }}-${{ hashFiles(format('**/{0}', steps.cache.outputs.lockfile)) }}
         restore-keys: |
           ${{ runner.os }}-${{ steps.package-manager.outputs.name }}-
 
