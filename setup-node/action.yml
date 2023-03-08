@@ -1,0 +1,58 @@
+name: "Setup Node.js environment"
+description: "Set up the Node.js environment and install dependencies. This is automatically identified by Corepack as the package manager to use"
+inputs:
+  node-version:
+    description: "Version Spec of the version to use. Examples: 12.x, 10.15.1, >=10.15.0."
+  node-version-file:
+    description: "File containing the version Spec of the version to use.  Examples: .nvmrc, .node-version, .tool-versions."
+runs:
+  using: "composite"
+  steps:
+    - id: package-manager
+      run: echo "name=$(cat package.json | jq -r '.packageManager' | sed -e 's/^null$/npm/' | sed -e 's/@.*$//')" >> $GITHUB_OUTPUT
+      shell: bash
+    - uses: actions/setup-node@v3
+      with:
+        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.node-version-file }}
+    - run: corepack enable ${{ steps.package-manager.outputs.name }}
+      shell: bash
+
+    - id: cache
+      run: |
+        case ${{ steps.package-manager.outputs.name }} in
+          npm)
+            echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+            echo "lockfile=package-lock.json" >> $GITHUB_OUTPUT
+            ;;
+          yarn)
+            echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+            echo "lockfile=yarn.lock" >> $GITHUB_OUTPUT
+            ;;
+          pnpm)
+            echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
+            echo "lockfile=pnpm-lock.yaml" >> $GITHUB_OUTPUT
+            ;;
+        esac
+      shell: bash
+
+    - uses: actions/cache@v3
+      with:
+        path: ${{ steps.cache.outputs.dir }}
+        key: ${{ runner.os }}-${{ steps.package-manager.outputs.name }}-${{ hashFiles(format('**/{}', steps.cache.outputs.lockfile)) }}
+        restore-keys: |
+          ${{ runner.os }}-${{ steps.package-manager.outputs.name }}-
+
+    - run: |
+        case ${{ steps.package-manager.outputs.name }} in
+          npm)
+            npm ci
+            ;;
+          yarn)
+            yarn install --immutable
+            ;;
+          pnpm)
+            pnpm install --frozen-lockfile
+            ;;
+        esac
+      shell: bash
