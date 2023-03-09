@@ -5,16 +5,28 @@ inputs:
     description: "Version Spec of the version to use. Examples: 12.x, 10.15.1, >=10.15.0."
   node-version-file:
     description: "File containing the version Spec of the version to use.  Examples: .nvmrc, .node-version, .tool-versions."
+
 runs:
   using: "composite"
   steps:
+    # Find the package manager to use
     - id: package-manager
-      run: echo "name=$(cat package.json | jq -r '.packageManager' | sed -e 's/^null$/npm/' | sed -e 's/@.*$//')" >> $GITHUB_OUTPUT
+      run: |
+        package_manager="$(cat package.json | jq -r '.packageManager')"
+        if [ "$package_manager" = "null" ]; then
+          echo "Cannot find a package manager in package.json." 1>&2
+          exit 1
+        fi
+
+        echo "name=${package_manager%%@*}" >> $GITHUB_OUTPUT
+        echo "version=${package_manager##*@}" >> $GITHUB_OUTPUT
       shell: bash
+
     - uses: actions/setup-node@v3
       with:
         node-version: ${{ inputs.node-version }}
         node-version-file: ${{ inputs.node-version-file }}
+
     - run: corepack enable ${{ steps.package-manager.outputs.name }}
       shell: bash
 
@@ -49,10 +61,22 @@ runs:
             npm ci
             ;;
           yarn)
-            yarn install --immutable
+            if [[ "$(echo ${{ steps.package-manager.outputs.version }} | awk -F'.' '{ print $1 }')" == "1" ]]; then
+              yarn install --frozen-lockfile
+            else
+              yarn install --immutable
+            fi
             ;;
           pnpm)
             pnpm install --frozen-lockfile
             ;;
         esac
       shell: bash
+
+outputs:
+  package-manager:
+    description: "The package manager to use"
+    value: ${{ steps.package-manager.outputs.name }}
+  package-manager-version:
+    description: "The version of the package manager to use"
+    value: ${{ steps.package-manager.outputs.version }}
